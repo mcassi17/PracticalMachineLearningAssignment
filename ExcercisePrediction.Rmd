@@ -1,0 +1,94 @@
+---
+title: "Excercise Prediction"
+author: Matt Cassi
+date: 5/22/2016
+output: html_document
+---
+
+##I. Introduction
+The following analysis uses excercise data to predict what excercise someone performed. The data comes from the "Weight Lifting Exercise Dataset" from the following URL, http://groupware.les.inf.puc-rio.br/har. The data was collected by having 6 participants wear ccelerometers on their belt, forearm, arm, and dumbell. The prediction was done by using machine learning algorithms.
+
+##II. Exploratory Analysis
+```{r, comment=NA, include = FALSE, echo=FALSE}
+library(caret)
+library(rpart)
+library(randomForest)
+trainingData <- read.csv("./pml-training.csv", na.strings=c("", "NA", "NULL"))
+testingData <- read.csv("./pml-testing.csv", na.strings=c("", "NA", "NULL"))
+```
+In order to perform this analysis, exploratory analysis was first conducted in order to determine if there were any problems with the data (i.e., outliers, missing values, NAs, etc.).
+
+In the r code output below, you can see that this dataset has 19k rows and 160 columns.
+```{r, comment=NA, echo=FALSE}
+dim(trainingData)
+```
+After looking at the dimension of the dataset, the structure of the dataset was looked at. This was done to see what type of variables were in the set. The output can be seen in the Appendix of this document. When you look at this output, you can see that there are a lot of NA values for a lot of the columns in the dataset. This could turn out to be an issue with predicting excerises.
+
+The next step was to look at a summary of the data. This can be seen in the Appendix. This confirms that there are, in fact, a lot of missing data in many of the columns. Based on this, it was determined that the columns that have missing data need to be removed.
+
+In order to remove the columns that have missing data, the number of "NA"s was summed up for each column. The data was subsetted by finding the columns that had no NA values. The data was then subsetted again to remove the first few columns of the dataset. These variables included timestamps, the index, and the user that completed the exercise.
+```{r}
+set.seed(1726)
+smallerTraining <- trainingData[ , colSums(is.na(trainingData)) == 0]
+smallestTraining <- subset(smallerTraining, select = -c(X, user_name, new_window, 
+                        num_window, raw_timestamp_part_1, 
+                        raw_timestamp_part_2, cvtd_timestamp))
+```
+
+After doing this, the number of columns is reduced to 53. This new dataset will be the one used for this analysis.
+```{r, comment=NA, echo=FALSE}
+dim(smallestTraining)
+```
+
+##III. Cross Validation
+Cross validation was then done on the data to create a training set and a test set. The training set is used to build the model and the test set is used to see how the model did.
+
+The dataset from the Exploratory Analysis was split 75/25 for the training and the testing set. The following r code shows how this was done.
+```{r, comment=NA}
+inTrain <- createDataPartition(y=smallestTraining$classe, p=0.75, list=FALSE)
+dataTrain <- smallestTraining[inTrain,]
+dataTest <- smallestTraining[-inTrain,]
+```
+##IV. Model Development
+The first model attempted was a tree-based model using the "rpart" package in R. This algorithm splits data based on a variable that best separates the outcome (classe variable in this dataset). The algorithm then divides the data into two groups and then for each group, it splits the data on a variable that best separates the data. It continues until the dataset it homogeneous. 
+
+The following R code shows how this model was built. The outcome is the classe variable and we used the other 52 columns as predictors. This was done using the training set. Once the model was built, we used the predict function to predict the classe variable in the test set. The confusion matrix was then done to show how well the model did.
+```{r, comment=NA}
+treeModel1 <- train(classe ~ ., data = dataTrain, method="rpart")
+pred1 <- predict(treeModel1, dataTest)
+confusionMatrix(pred1, dataTest$classe)
+```
+Unfortunately, this model did not do very well as the prediction was on 50% correct. Because of this another method was used.
+
+The next model used was a random forest model. Random forests are a combination of tree predictors such that each tree depends on the values of a random vector sampled independently and with the same distribution for all trees in the forest (from https://www.stat.berkeley.edu/~breiman/randomforest2001.pdf). The following R code builds this model with the classe variable as the output and the remaining 52 columns as predictors. This was done with the training set and then the predict function was used with the test dataset to see how the model did.
+```{r, comment=NA}
+rfModel1 <- train(classe ~ ., data = dataTrain, method="rf")
+pred2 <- predict(rfModel1, dataTest)
+confusionMatrix(pred2, dataTest$classe)
+```
+The confusion matrix shows that this model was about 99.5% correct, which is very good.
+
+Based on the information from the confusion matrix, we can calculate the out of sample error, which is 1 minus the model accuracy. 
+```{r, comment=NA}
+outOfSampleError <- 1 - .9945
+outOfSampleError
+```
+
+##V. Model Selection
+The random forest model was selected because of how well it did with the test dataset. It was 99.5% correct, whereas the tree model was only 50% correct in predicting which excercise was performed.  This model was used for the the 20 sample test data (testingdata variable in the r code).
+
+The predict function was used again but this time it was used on the testing dataset provided, which had 20 rows. The output of this prediction is what the model predicted based on the full dataset.
+```{r, comment=NA}
+pred4 <- predict(rfModel1, testingData)
+pred4
+```
+
+##VI. Appendix
+Structure of the Data
+```{r, comment=NA, echo=FALSE}
+str(trainingData)
+```
+Summary of the Data
+```{r, comment=NA, echo=FALSE}
+summary(trainingData)
+```
